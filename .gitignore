@@ -1,0 +1,68 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environment
+venv/
+env/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+
+# Environment Variables
+.env
+.env.*
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Build Files
+build/
+dist/
+*.egg-info/
+
+# ChromaDB
+chroma_db/
+vectorstore/
+
+# Uploaded Documents
+uploads/
+documents/
+
+# Model Cache
+models/
+cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Temporary Files
+temp/
+tmp/
+
+# Coverage
+.coverage
+htmlcov/
+
+# Testing
+.pytest_cache/
+
+# OllamaCopilot Generated Files
+exports/
+reports/
+screenshots/
