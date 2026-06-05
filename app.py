@@ -1,225 +1,255 @@
+# OllamaCopilot app.py
+# NOTE:
+# save_chat() should return cursor.lastrowid in db.py
+
 import streamlit as st
 import ollama
-from datetime import datetime
-import os
+from database.db import save_chat, get_all_chats, get_chat_by_id, update_chat, delete_chat, get_chat_titles
+import json
 
-# --------------------------------------------------
-# Page Config
-# --------------------------------------------------
-
-st.set_page_config(
-    page_title="OllamaCopilot",
-    page_icon="🤖",
-    layout="wide"
-)
-
-# --------------------------------------------------
-# Create Chats Folder
-# --------------------------------------------------
-
-if not os.path.exists("chats"):
-    os.makedirs("chats")
-
-# --------------------------------------------------
-# Session State
-# --------------------------------------------------
+st.set_page_config(page_title="OllamaCopilot", page_icon="🤖", layout="wide")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
+chat_text = ""
+
+for msg in st.session_state.messages:
+
+    chat_text += (
+        f"{msg['role']} : "
+        f"{msg['content']}\n\n"
+    )
+messages_json = json.dumps(
+    st.session_state.messages
+)
 
 if "chat_title" not in st.session_state:
     st.session_state.chat_title = "New Conversation"
 
-# --------------------------------------------------
-# Sidebar
-# --------------------------------------------------
+if "current_chat_id" not in st.session_state:
+    st.session_state.current_chat_id = None
+
+MODELS = [
+    "phi3:latest",
+    "llama3:8b",
+    "llama3:instruct",
+    "llama3.1:8b",
+    "qwen3:8b",
+    "gemma3:4b",
+    "mistral:latest",
+    "deepseek-coder:latest"
+]
 
 st.sidebar.title("🤖 OllamaCopilot")
 
-model = st.sidebar.selectbox(
-    "Select Model",
-    [
-        "phi3:latest",
-        "llama3:8b",
-        "llama3:instruct",
-        "llama3.1:8b",
-        "qwen3:8b",
-        "gemma3:4b",
-        "mistral:latest",
-        "deepseek-coder:latest"
-    ],
-    index=0
-)
+model = st.sidebar.selectbox("Select Model", MODELS, index=0)
 
-# Statistics
 st.sidebar.subheader("📊 Statistics")
+st.sidebar.write(f"Messages: {len(st.session_state.messages)}")
 
-total_messages = len(st.session_state.messages)
-
-user_messages = len(
-    [m for m in st.session_state.messages
-     if m["role"] == "user"]
-)
-
-st.sidebar.write(f"Total Messages: {total_messages}")
-st.sidebar.write(f"User Messages: {user_messages}")
-
-# Current Chat
 st.sidebar.subheader("💬 Current Chat")
 st.sidebar.write(st.session_state.chat_title)
 
-# Export Chat
-st.sidebar.subheader("📤 Export")
-
 chat_text = ""
-
 for msg in st.session_state.messages:
-    chat_text += (
-        f"{msg['role'].upper()}:\n"
-        f"{msg['content']}\n\n"
-    )
+    chat_text += f"{msg['role']} : {msg['content']}\n\n"
 
 st.sidebar.download_button(
-    label="⬇ Download Chat",
-    data=chat_text,
-    file_name="conversation.txt",
-    mime="text/plain"
+    "⬇ Download Chat",
+    chat_text,
+    "conversation.txt",
+    "text/plain"
 )
 
-# Save Chat
-if st.sidebar.button("💾 Save Chat"):
+st.sidebar.subheader("📚 Saved Chats")
 
-    filename = (
-        f"chats/chat_"
-        f"{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
-    )
+try:
+    chats = get_all_chats()
 
-    with open(
-        filename,
-        "w",
-        encoding="utf-8"
-    ) as f:
+    for chat in chats:
 
-        for msg in st.session_state.messages:
+        c1, c2, c3 = st.sidebar.columns([4, 1, 1])
 
-            f.write(
-                f"{msg['role'].upper()}:\n"
-            )
+        with c1:
 
-            f.write(
-                f"{msg['content']}\n\n"
-            )
+            if st.button(
+                f"{chat[0]} - {chat[1]}",
+                key=f"load_{chat[0]}"
+            ):
 
-    st.sidebar.success("Chat Saved Successfully")
+                record = get_chat_by_id(
+                    chat[0]
+                )
 
-# History
+                if record:
+
+                    st.session_state.current_chat_id = (
+                        record[0]
+                    )
+
+                    st.session_state.chat_title = (
+                        record[1]
+                    )
+
+                    st.sidebar.success(
+                        "Chat Loaded"
+                    )
+
+        with c2:
+
+            if st.button(
+                "🔄",
+                key=f"update_{chat[0]}"
+            ):
+
+                chat_text = ""
+
+                for msg in st.session_state.messages:
+
+                    chat_text += (
+                        f"{msg['role']} : "
+                        f"{msg['content']}\n\n"
+                    )
+
+                update_chat(
+                    chat[0],
+                    st.session_state.chat_title,
+                    chat_text,
+                    messages_json
+                )
+
+                st.sidebar.success(
+                    "Chat Updated"
+                )
+
+        with c3:
+
+            if st.button(
+                "❌",
+                key=f"delete_{chat[0]}"
+            ):
+
+                delete_chat(
+                    chat[0]
+                )
+
+                st.rerun()
+
+except Exception as e:
+
+    st.sidebar.error(str(e))
+
+
 st.sidebar.subheader("📝 History")
 
-history_items = [
-    m for m in st.session_state.messages
-    if m["role"] == "user"
-]
+try:
 
-if history_items:
+    history = get_chat_titles()
 
-    for i, msg in enumerate(
-            history_items[-10:],
-            start=1):
+    if history:
+
+        for chat in history:
+
+            if st.sidebar.button(
+                f"{chat[1]}",
+                key=f"history_{chat[0]}"
+            ):
+
+                record = get_chat_by_id(
+                    chat[0]
+                )
+
+                st.session_state.current_chat_id = (
+                    record[0]
+                )
+
+                st.session_state.chat_title = (
+                    record[1]
+                )
+
+                st.sidebar.success(
+                    f"Loaded {record[1]}"
+                )
+
+    else:
 
         st.sidebar.write(
-            f"{i}. {msg['content'][:30]}"
+            "No history found"
         )
 
-else:
-    st.sidebar.write("No history yet")
+except Exception as e:
 
-# New Conversation
+    st.sidebar.error(str(e))
+
 if st.sidebar.button("🆕 New Conversation"):
 
     st.session_state.messages = []
-    st.session_state.chat_title = "New Conversation"
+
+    st.session_state.chat_title = (
+        "New Conversation"
+    )
+
+    st.session_state.current_chat_id = None
 
     st.rerun()
 
-# --------------------------------------------------
-# Main Screen
-# --------------------------------------------------
-
 st.title("🤖 OllamaCopilot")
 
-# Display Messages
-
 for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
 
-    with st.chat_message(
-            message["role"]):
-
-        st.markdown(
-            message["content"]
-        )
-
-# --------------------------------------------------
-# User Input
-# --------------------------------------------------
-
-prompt = st.chat_input(
-    "Ask anything..."
-)
+prompt = st.chat_input("Ask anything...")
 
 if prompt:
 
-    # Set Title
     if len(st.session_state.messages) == 0:
+        st.session_state.chat_title = prompt[:40]
 
-        st.session_state.chat_title = (
-            prompt[:40]
+    st.session_state.messages.append({
+        "role": "user",
+        "content": prompt
+    })
+
+    with st.spinner("Thinking..."):
+        response = ollama.chat(
+            model=model,
+            messages=st.session_state.messages
         )
 
-    # User Message
-    st.session_state.messages.append(
-        {
-            "role": "user",
-            "content": prompt
-        }
-    )
+        ai_response = response["message"]["content"]
 
-    with st.chat_message("user"):
+    st.session_state.messages.append({
+        "role": "assistant",
+        "content": ai_response
+    })
 
-        st.markdown(prompt)
+    chat_text = ""
+    for msg in st.session_state.messages:
+        chat_text += f"{msg['role']} : {msg['content']}\n\n"
 
     try:
 
-        with st.spinner("Thinking..."):
+        if st.session_state.current_chat_id is None:
 
-            response = ollama.chat(
-                model=model,
-                messages=st.session_state.messages
+            inserted_id = save_chat(
+                st.session_state.chat_title,
+                chat_text,
+                messages_json
             )
 
-            ai_response = (
-                response["message"]["content"]
+            st.session_state.current_chat_id = inserted_id
+
+        else:
+
+            update_chat(
+                st.session_state.current_chat_id,
+                st.session_state.chat_title,
+                chat_text,
+                messages_json
             )
 
     except Exception as e:
-
-        ai_response = (
-            f"Error: {str(e)}"
-        )
-
-    # Assistant Message
-
-    st.session_state.messages.append(
-        {
-            "role": "assistant",
-            "content": ai_response
-        }
-    )
-
-    with st.chat_message(
-            "assistant"):
-
-        st.markdown(
-            ai_response
-        )
+        st.error(f"Database Error: {e}")
 
     st.rerun()

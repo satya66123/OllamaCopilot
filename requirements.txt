@@ -1,6 +1,7 @@
 openai
 streamlit
 ollama
+mysql-connector-python
 
 # Database
 sqlalchemy
