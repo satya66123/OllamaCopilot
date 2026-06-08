@@ -97,3 +97,27 @@ def get_all_chunks():
     conn.close()
 
     return rows
+
+def delete_document(
+        document_name
+):
+
+    conn = get_connection()
+
+    cursor = conn.cursor()
+
+    query = """
+    DELETE
+    FROM document_chunks
+    WHERE document_name=%s
+    """
+
+    cursor.execute(
+        query,
+        (document_name,)
+    )
+
+    conn.commit()
+
+    cursor.close()
+    conn.close()

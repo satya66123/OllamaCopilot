@@ -1,3 +1,4 @@
+reportlab
 openai
 streamlit
 ollama

@@ -277,3 +277,30 @@ def get_chat_titles():
     conn.close()
 
     return rows
+
+def search_chats(keyword):
+
+    conn = get_connection()
+
+    cursor = conn.cursor()
+
+    query = """
+    SELECT
+        id,
+        title
+    FROM chats
+    WHERE title LIKE %s
+    ORDER BY id DESC
+    """
+
+    cursor.execute(
+        query,
+        (f"%{keyword}%",)
+    )
+
+    rows = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+
+    return rows

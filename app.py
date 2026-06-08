@@ -15,13 +15,30 @@ from database.db import (
     get_total_chats,
     get_max_chat_id,
     get_rag_chats,
-    get_all_rag_chats
+    get_all_rag_chats,
+    search_chats,
+
+
+)
+
+from docx import Document
+
+from reportlab.platypus import (
+    SimpleDocTemplate,
+    Paragraph,
+    Spacer
+)
+
+from reportlab.lib.styles import (
+    getSampleStyleSheet
 )
 
 from database.vector_db import (
     save_chunk,
     get_documents,
-    get_document_count
+    get_document_count,
+    delete_document
+
 )
 
 from database.vector_search import (
@@ -41,6 +58,8 @@ from utils.file_reader import (
     read_docx,
     read_txt
 )
+
+from datetime import datetime
 
 # ------------------------------------------------
 # PAGE CONFIG
@@ -131,6 +150,74 @@ else:
 
         "gpt-4.1"
     ]
+def get_stream_response(
+        provider,
+        model,
+        messages,
+        api_key=""
+):
+
+    response_placeholder = st.empty()
+
+    full_response = ""
+
+    if provider == "Ollama":
+
+        stream = ollama.chat(
+            model=model,
+            messages=messages,
+            stream=True
+        )
+
+        for chunk in stream:
+
+            token = chunk[
+                "message"
+            ]["content"]
+
+            full_response += token
+
+            response_placeholder.markdown(
+                full_response + "▌"
+            )
+
+    else:
+
+        client = OpenAI(
+            api_key=api_key
+        )
+
+        stream = (
+            client.chat.completions.create(
+                model=model,
+                messages=messages,
+                stream=True
+            )
+        )
+
+        for chunk in stream:
+
+            if (
+                chunk.choices[0]
+                .delta.content
+            ):
+
+                token = (
+                    chunk.choices[0]
+                    .delta.content
+                )
+
+                full_response += token
+
+                response_placeholder.markdown(
+                    full_response + "▌"
+                )
+
+    response_placeholder.markdown(
+        full_response
+    )
+
+    return full_response
 
 def get_ai_response(
         provider,
@@ -172,6 +259,77 @@ def get_ai_response(
 # ------------------------------------------------
 # SIDEBAR
 # ------------------------------------------------
+def export_pdf():
+
+    pdf_file = "chat_export.pdf"
+
+    doc = SimpleDocTemplate(
+        pdf_file
+    )
+
+    styles = getSampleStyleSheet()
+
+    content = [Paragraph(
+        "OllamaCopilot Chat Export",
+        styles["Title"]
+    ), Spacer(1, 12)]
+
+    for msg in (
+        st.session_state.messages
+    ):
+
+        content.append(
+            Paragraph(
+                f"<b>{msg['role'].upper()}</b>",
+                styles["Heading2"]
+            )
+        )
+
+        content.append(
+            Paragraph(
+                msg["content"],
+                styles["BodyText"]
+            )
+        )
+
+        content.append(
+            Spacer(1,10)
+        )
+
+    doc.build(content)
+
+    return pdf_file
+def export_docx():
+
+    doc = Document()
+
+    doc.add_heading(
+        "OllamaCopilot Chat Export",
+        0
+    )
+
+    for msg in (
+        st.session_state.messages
+    ):
+
+        doc.add_heading(
+            msg["role"].upper(),
+            level=1
+        )
+
+        doc.add_paragraph(
+            msg["content"]
+        )
+
+    file_name = (
+        "chat_export.docx"
+    )
+
+    doc.save(
+        file_name
+    )
+
+    return file_name
 
 st.sidebar.title(
     "🤖 OllamaCopilot"
@@ -251,17 +409,67 @@ try:
         )
 
 
-
-
-
-
-
-
 except Exception as e:
 
     st.sidebar.error(
         f"Statistics Error: {e}"
     )
+#------------------------------
+#----------Search--------------
+#------------------------------
+st.sidebar.subheader(
+    "🔍 Search Chats"
+)
+
+search_text = st.sidebar.text_input(
+    "Search Title"
+)
+
+if search_text:
+
+    results = search_chats(
+        search_text
+    )
+
+    st.sidebar.write(
+        f"Found: {len(results)}"
+    )
+
+    for chat in results:
+
+        if st.sidebar.button(
+            f"{chat[0]} - {chat[1]}",
+            key=f"search_{chat[0]}"
+        ):
+
+            record = get_chat_by_id(
+                chat[0]
+            )
+
+            if record:
+
+                st.session_state.current_chat_id = (
+                    record[0]
+                )
+
+                st.session_state.chat_title = (
+                    record[1]
+                )
+
+                try:
+
+                    st.session_state.messages = (
+                        json.loads(
+                            record[4]
+                        )
+                    )
+
+                except:
+
+                    pass
+
+                st.rerun()
+
 
 # ------------------------------------------------
 # MODE SPECIFIC SIDEBAR
@@ -282,6 +490,104 @@ else:
     st.sidebar.info(
         "RAG Mode Active"
     )
+
+chat_export = f"""
+====================================
+OllamaCopilot Chat Export
+====================================
+
+Chat Title:
+{st.session_state.chat_title}
+
+Export Date:
+{datetime.now()}
+
+Total Messages:
+{len(st.session_state.messages)}
+
+====================================
+Conversation
+====================================
+
+"""
+
+for msg in st.session_state.messages:
+
+    role = msg["role"].upper()
+
+    chat_export += f"""
+
+------------------------------------
+{role}
+------------------------------------
+
+{msg['content']}
+
+"""
+
+st.sidebar.download_button(
+    "⬇ Export Chat",
+    chat_export,
+    file_name=f"{st.session_state.chat_title}.txt",
+    mime="text/plain"
+)
+
+if st.sidebar.button(
+    "📄 Export PDF"
+):
+
+    pdf_file = export_pdf()
+
+    with open(
+        pdf_file,
+        "rb"
+    ) as f:
+
+        st.sidebar.download_button(
+            "Download PDF",
+            f,
+            file_name=
+            "chat_export.pdf"
+        )
+
+
+if st.sidebar.button(
+    "📝 Export DOCX"
+):
+
+    docx_file = (
+        export_docx()
+    )
+
+    with open(
+        docx_file,
+        "rb"
+    ) as f:
+
+        st.sidebar.download_button(
+            "Download DOCX",
+            f,
+            file_name=
+            "chat_export.docx"
+        )
+
+chat_json = json.dumps(
+    st.session_state.messages,
+    indent=4,
+    ensure_ascii=False
+)
+
+st.sidebar.download_button(
+    "📦 Export JSON",
+    chat_json,
+    file_name=
+    "chat_export.json",
+    mime=
+    "application/json"
+)
+
+
+
 
 # ------------------------------------------------
 # CHAT SIDEBAR
@@ -356,6 +662,9 @@ if (
         file_name="conversation.txt",
         mime="text/plain"
     )
+
+
+
 
     # --------------------------------------------
     # SAVED CHATS
@@ -935,37 +1244,40 @@ if (
 
     try:
 
-        documents = (
-            get_documents()
-        )
+        documents = get_documents()
 
-        if documents:
+        for doc in documents:
 
-            for doc in documents:
+            c1, c2 = st.sidebar.columns(
+                [5, 1]
+            )
+            with c1:
 
-                document_name = (
+             if st.button(
+                    f"📄 {doc[0]}",
+                    key=f"doc_{doc[0]}"
+            ):
+                st.session_state.selected_document = (
                     doc[0]
                 )
 
-                if st.sidebar.button(
-                    document_name,
-                    key=f"doc_{document_name}"
+                st.rerun()
+
+            with c2:
+
+                if st.button(
+                        "❌",
+                        key=f"doc_delete_{doc[0]}"
                 ):
-
-                    st.session_state.selected_document = (
-                        document_name
+                    delete_document(
+                        doc[0]
                     )
 
-                    st.sidebar.success(
-                        f"Selected: "
-                        f"{document_name}"
+                    st.success(
+                        "Deleted"
                     )
 
-        else:
-
-            st.sidebar.info(
-                "No Documents Indexed"
-            )
+                    st.rerun()
 
     except Exception as e:
 
@@ -1201,13 +1513,14 @@ if st.session_state.app_mode == "💬 Chat":
                     "Thinking..."
                 ):
                     full_response = (
-                        get_ai_response(
+                        get_stream_response(
                             provider,
                             model,
                             final_messages,
                             openai_api_key
                         )
                     )
+
 
                 response_placeholder.markdown(
                     full_response
@@ -1430,7 +1743,7 @@ Context:
                     ):
 
                         full_response = (
-                            get_ai_response(
+                            get_stream_response(
                                 provider,
                                 model,
                                 final_messages,
@@ -1477,19 +1790,7 @@ Context:
                     st.session_state.current_rag_chat_id = (
                         rag_chat_id
                     )
-                    st.session_state.rag_messages.append(
-                        {
-                            "role": "user",
-                            "content": rag_prompt
-                        }
-                    )
 
-                    st.session_state.rag_messages.append(
-                        {
-                            "role": "assistant",
-                            "content": full_response
-                        }
-                    )
                     if "selected_document" not in st.session_state:
                         st.session_state.selected_document = None
                     results = search_chunks(
