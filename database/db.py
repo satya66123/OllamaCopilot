@@ -54,6 +54,7 @@ def get_all_chats():
     query = """
     SELECT id,title,created_at
     FROM chats
+    WHERE title NOT LIKE 'RAG - %'
     ORDER BY id DESC
     """
 
@@ -65,6 +66,29 @@ def get_all_chats():
     conn.close()
 
     return rows
+
+def get_all_rag_chats():
+
+    conn = get_connection()
+
+    cursor = conn.cursor()
+
+    query = """
+    SELECT id,title,created_at
+    FROM chats
+    WHERE title  LIKE 'RAG - %'
+    ORDER BY id DESC
+    """
+
+    cursor.execute(query)
+
+    rows = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+
+    return rows
+
 
 
 def get_chat_by_id(chat_id):
@@ -147,6 +171,90 @@ def update_chat(
     cursor.close()
     conn.close()
 
+def get_total_chats():
+
+    conn = get_connection()
+
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "SELECT COUNT(*) FROM chats"
+    )
+
+    count = cursor.fetchone()[0]
+
+    cursor.close()
+    conn.close()
+
+    return count
+
+def get_max_chat_id():
+
+    conn = get_connection()
+
+    cursor = conn.cursor()
+
+    query = """
+    SELECT MAX(id)
+    FROM chats
+    """
+
+    cursor.execute(query)
+
+    result = cursor.fetchone()
+
+    cursor.close()
+    conn.close()
+
+    if result and result[0]:
+        return result[0]
+
+    return 0
+
+def get_latest_chat():
+
+    conn = get_connection()
+
+    cursor = conn.cursor()
+
+    cursor.execute("""
+    SELECT id,title
+    FROM chats
+    ORDER BY id DESC
+    LIMIT 1
+    """)
+
+    row = cursor.fetchone()
+
+    cursor.close()
+    conn.close()
+
+    return row
+
+def get_rag_chats():
+
+    conn = get_connection()
+
+    cursor = conn.cursor()
+
+    query = """
+    SELECT
+        id,
+        title
+    FROM chats
+    WHERE title LIKE 'RAG - %'
+    ORDER BY id DESC
+    """
+
+    cursor.execute(query)
+
+    rows = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+
+    return rows
+
 
 def get_chat_titles():
 
@@ -157,6 +265,7 @@ def get_chat_titles():
     query = """
     SELECT id,title
     FROM chats
+    WHERE title NOT LIKE 'RAG - %'
     ORDER BY id DESC
     """
 
