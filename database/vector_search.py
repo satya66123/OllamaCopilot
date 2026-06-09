@@ -16,14 +16,15 @@ from database.vector_db import (
 def search_chunks(
         question,
         selected_document=None,
-        top_k=5
+        top_k=5,
+        user_id=0
 ):
 
     question_embedding = (
         create_embedding(question)
     )
 
-    chunks = get_all_chunks()
+    chunks = get_all_chunks(user_id)
 
     results = []
 

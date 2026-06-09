@@ -1,6 +1,7 @@
 import mysql.connector
+import bcrypt
 
-
+user_id=0
 def get_connection():
 
     return mysql.connector.connect(
@@ -12,7 +13,7 @@ def get_connection():
     )
 
 
-def save_chat(title, content, messages_json):
+def save_chat(title, content, messages_json,user_id):
 
     conn = get_connection()
 
@@ -22,9 +23,10 @@ def save_chat(title, content, messages_json):
     INSERT INTO chats(
         title,
         content,
-        messages_json
+        messages_json,
+        user_id
     )
-    VALUES(%s,%s,%s)
+    VALUES(%s,%s,%s,%s)
     """
 
     cursor.execute(
@@ -32,7 +34,8 @@ def save_chat(title, content, messages_json):
         (
             title,
             content,
-            messages_json
+            messages_json,
+            user_id
         )
     )
 
@@ -45,20 +48,23 @@ def save_chat(title, content, messages_json):
 
     return inserted_id
 
-def get_all_chats():
+def get_all_chats(user_id):
 
     conn = get_connection()
-
     cursor = conn.cursor()
 
     query = """
     SELECT id,title,created_at
     FROM chats
     WHERE title NOT LIKE 'RAG - %'
+    AND user_id=%s
     ORDER BY id DESC
     """
 
-    cursor.execute(query)
+    cursor.execute(
+        query,
+        (user_id,)
+    )
 
     rows = cursor.fetchall()
 
@@ -67,7 +73,7 @@ def get_all_chats():
 
     return rows
 
-def get_all_rag_chats():
+def get_all_rag_chats(user_id):
 
     conn = get_connection()
 
@@ -76,11 +82,14 @@ def get_all_rag_chats():
     query = """
     SELECT id,title,created_at
     FROM chats
-    WHERE title  LIKE 'RAG - %'
+    WHERE title  LIKE 'RAG - %' AND user_id=%s
     ORDER BY id DESC
     """
 
-    cursor.execute(query)
+    cursor.execute(
+        query,
+        (user_id,)
+    )
 
     rows = cursor.fetchall()
 
@@ -113,7 +122,7 @@ def get_chat_by_id(chat_id):
     return row
 
 
-def delete_chat(chat_id):
+def delete_chat(chat_id, user_id):
 
     conn = get_connection()
 
@@ -121,10 +130,10 @@ def delete_chat(chat_id):
 
     query = """
     DELETE FROM chats
-    WHERE id=%s
+    WHERE id=%s AND user_id=%s
     """
 
-    cursor.execute(query, (chat_id,))
+    cursor.execute(query, (chat_id,user_id,))
 
     conn.commit()
 
@@ -136,7 +145,8 @@ def update_chat(
         chat_id,
         title,
         content,
-        messages_json
+        messages_json,
+        user_id
 ):
 
     conn = get_connection()
@@ -147,9 +157,11 @@ def update_chat(
     UPDATE chats
     SET title=%s,
         content=%s,
-        messages_json=%s
+        messages_json=%s,
+        user_id=%s
     WHERE id=%s
     """
+
 
     cursor.execute(
         query,
@@ -157,6 +169,7 @@ def update_chat(
             title,
             content,
             messages_json,
+            user_id,
             chat_id
         )
     )
@@ -171,14 +184,18 @@ def update_chat(
     cursor.close()
     conn.close()
 
-def get_total_chats():
+def get_total_chats(user_id):
 
     conn = get_connection()
-
     cursor = conn.cursor()
 
     cursor.execute(
-        "SELECT COUNT(*) FROM chats"
+        """
+        SELECT COUNT(*)
+        FROM chats
+        WHERE user_id=%s
+        """,
+        (user_id,)
     )
 
     count = cursor.fetchone()[0]
@@ -231,7 +248,7 @@ def get_latest_chat():
 
     return row
 
-def get_rag_chats():
+def get_rag_chats(user_id):
 
     conn = get_connection()
 
@@ -242,11 +259,11 @@ def get_rag_chats():
         id,
         title
     FROM chats
-    WHERE title LIKE 'RAG - %'
+    WHERE title LIKE 'RAG - %' AND user_id=%s
     ORDER BY id DESC
     """
 
-    cursor.execute(query)
+    cursor.execute(query,(user_id,))
 
     rows = cursor.fetchall()
 
@@ -256,7 +273,7 @@ def get_rag_chats():
     return rows
 
 
-def get_chat_titles():
+def get_chat_titles(user_id):
 
     conn = get_connection()
 
@@ -265,11 +282,11 @@ def get_chat_titles():
     query = """
     SELECT id,title
     FROM chats
-    WHERE title NOT LIKE 'RAG - %'
+    WHERE title NOT LIKE 'RAG - %' AND user_id= %s
     ORDER BY id DESC
     """
 
-    cursor.execute(query)
+    cursor.execute(query,(user_id,))
 
     rows = cursor.fetchall()
 
@@ -278,7 +295,7 @@ def get_chat_titles():
 
     return rows
 
-def search_chats(keyword):
+def search_chats(keyword,user_id):
 
     conn = get_connection()
 
@@ -289,13 +306,13 @@ def search_chats(keyword):
         id,
         title
     FROM chats
-    WHERE title LIKE %s
+    WHERE title LIKE %s AND user_id=%s
     ORDER BY id DESC
     """
 
     cursor.execute(
         query,
-        (f"%{keyword}%",)
+        (f"%{keyword}%",user_id,)
     )
 
     rows = cursor.fetchall()
@@ -304,3 +321,78 @@ def search_chats(keyword):
     conn.close()
 
     return rows
+
+
+def create_user(
+        username,
+        password
+):
+
+    hashed_password = (
+        bcrypt.hashpw(
+            password.encode(),
+            bcrypt.gensalt()
+        )
+    )
+
+    conn = get_connection()
+
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        INSERT INTO users(
+            username,
+            password
+        )
+        VALUES(%s,%s)
+        """,
+        (
+            username,
+            hashed_password.decode()
+        )
+    )
+
+    conn.commit()
+
+    cursor.close()
+    conn.close()
+
+def login_user(
+        username,
+        password
+):
+
+    conn = get_connection()
+
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        SELECT *
+        FROM users
+        WHERE username=%s
+        """,
+        (username,)
+    )
+
+    user = cursor.fetchone()
+
+    cursor.close()
+    conn.close()
+
+    if not user:
+        return None
+
+    stored_hash = (
+        user[2]
+    )
+
+    if bcrypt.checkpw(
+        password.encode(),
+        stored_hash.encode()
+    ):
+
+        return user
+
+    return None

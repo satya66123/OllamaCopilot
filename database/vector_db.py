@@ -1,10 +1,13 @@
 from database.db import get_connection
 
 
+user_id=0
+
 def save_chunk(
         document_name,
         chunk_text,
-        embedding
+        embedding,
+        user_id
 ):
 
     conn = get_connection()
@@ -15,9 +18,10 @@ def save_chunk(
     INSERT INTO document_chunks(
         document_name,
         chunk_text,
-        embedding
+        embedding,
+        user_id
     )
-    VALUES(%s,%s,%s)
+    VALUES(%s,%s,%s,%s)
     """
 
     cursor.execute(
@@ -25,7 +29,8 @@ def save_chunk(
         (
             document_name,
             chunk_text,
-            str(embedding)
+            str(embedding),
+            user_id
         )
     )
 
@@ -34,7 +39,7 @@ def save_chunk(
     cursor.close()
     conn.close()
 
-def get_documents():
+def get_documents(user_id):
 
     conn = get_connection()
 
@@ -43,10 +48,14 @@ def get_documents():
     query = """
     SELECT DISTINCT document_name
     FROM document_chunks
+    WHERE user_id=%s
     ORDER BY document_name
     """
 
-    cursor.execute(query)
+    cursor.execute(
+        query,
+        (user_id,)
+    )
 
     rows = cursor.fetchall()
 
@@ -54,18 +63,24 @@ def get_documents():
     conn.close()
 
     return rows
-def get_document_count():
+def get_document_count(user_id):
 
     conn = get_connection()
 
     cursor = conn.cursor()
 
-    cursor.execute("""
+    query = """
     SELECT COUNT(
         DISTINCT document_name
     )
     FROM document_chunks
-    """)
+    WHERE user_id=%s
+    """
+
+    cursor.execute(
+        query,
+        (user_id,)
+    )
 
     count = cursor.fetchone()[0]
 
@@ -74,7 +89,7 @@ def get_document_count():
 
     return count
 
-def get_all_chunks():
+def get_all_chunks(user_id):
 
     conn = get_connection()
 
@@ -87,9 +102,13 @@ def get_all_chunks():
         chunk_text,
         embedding
     FROM document_chunks
+    WHERE user_id=%s
     """
 
-    cursor.execute(query)
+    cursor.execute(
+        query,
+        (user_id,)
+    )
 
     rows = cursor.fetchall()
 
@@ -99,7 +118,8 @@ def get_all_chunks():
     return rows
 
 def delete_document(
-        document_name
+        document_name,
+        user_id
 ):
 
     conn = get_connection()
@@ -110,11 +130,15 @@ def delete_document(
     DELETE
     FROM document_chunks
     WHERE document_name=%s
+    AND user_id=%s
     """
 
     cursor.execute(
         query,
-        (document_name,)
+        (
+            document_name,
+            user_id
+        )
     )
 
     conn.commit()

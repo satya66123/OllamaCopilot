@@ -3,6 +3,10 @@ import json
 import ollama
 from openai import OpenAI
 import streamlit as st
+from database.db import (
+    create_user,
+    login_user
+)
 
 from database.db import (
     save_chat,
@@ -74,6 +78,15 @@ st.set_page_config(
 # ------------------------------------------------
 # SESSION STATE
 # ------------------------------------------------
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+
+if "username" not in st.session_state:
+    st.session_state.username = None
+
+if "userid" not in st.session_state:
+    st.session_state.userid = None
+
 
 DEFAULTS = {
 
@@ -82,6 +95,9 @@ DEFAULTS = {
     "messages": [],
     "chat_title": "New Conversation",
     "current_chat_id": None,
+    "logged_in": "",
+    "username": "",
+    "userid":"",
 
     # RAG
 
@@ -104,7 +120,140 @@ for key, value in DEFAULTS.items():
 # ------------------------------------------------
 # MODELS
 # ------------------------------------------------
-provider = st.sidebar.selectbox(
+if not st.session_state.logged_in :
+ st.sidebar.subheader(
+    "🔐 Authentication"
+)
+ auth_mode = st.sidebar.radio(
+    "Select",
+    [
+        "Login",
+        "Signup"
+    ]
+)
+ if auth_mode == "Signup":
+
+    username = st.sidebar.text_input(
+        "Username"
+    )
+
+    password = st.sidebar.text_input(
+        "Password",
+        type="password"
+    )
+
+    if st.sidebar.button(
+        "Create Account"
+    ):
+
+        try:
+
+            create_user(
+                username,
+                password
+            )
+
+            st.sidebar.success(
+                "Account Created"
+            )
+
+        except Exception as e:
+
+            st.sidebar.error(
+                str(e)
+            )
+ if auth_mode == "Login":
+
+    username = st.sidebar.text_input(
+        "Username"
+    )
+
+    password = st.sidebar.text_input(
+        "Password",
+        type="password"
+    )
+
+    if st.sidebar.button(
+        "Login"
+    ):
+
+        user = login_user(
+            username,
+            password
+        )
+
+        if user:
+
+            st.session_state.logged_in = True
+
+            st.session_state.userid = (
+                user[0]
+            )
+
+            st.session_state.username = (
+                user[1]
+            )
+
+            st.rerun()
+
+        else:
+
+            st.sidebar.error(
+                "Invalid Login"
+            )
+
+else:
+ if st.session_state.logged_in:
+
+     st.sidebar.success(
+         f"👤 {st.session_state.username}"
+     )
+
+     if st.sidebar.button(
+             "🚪 Logout"
+     ):
+         st.session_state.logged_in = False
+
+         st.session_state.username = None
+
+         st.session_state.messages = []
+
+         st.session_state.rag_messages = []
+
+         st.session_state.current_chat_id = None
+
+         st.session_state.current_rag_chat_id = None
+
+         st.session_state.chat_title = (
+             "New Conversation"
+         )
+         if st.session_state.logged_in:
+
+             st.sidebar.success(
+                 f"👤 {st.session_state.username}"
+             )
+
+             if st.sidebar.button(
+                     "🚪 Logout"
+             ):
+                 st.session_state.logged_in = False
+
+                 st.session_state.username = None
+
+                 st.session_state.messages = []
+
+                 st.session_state.rag_messages = []
+
+                 st.session_state.current_chat_id = None
+
+                 st.session_state.current_rag_chat_id = None
+
+                 st.session_state.chat_title = (
+                     "New Conversation"
+                 )
+                 st.rerun()
+
+ provider = st.sidebar.selectbox(
     "Provider",
     [
         "Ollama",
@@ -112,16 +261,16 @@ provider = st.sidebar.selectbox(
     ]
 )
 
-openai_api_key = ""
+ openai_api_key = ""
 
-if provider == "OpenAI":
+ if provider == "OpenAI":
 
     openai_api_key = st.sidebar.text_input(
         "OpenAI API Key",
         type="password"
     )
 
-if provider == "Ollama":
+ if provider == "Ollama":
 
     MODELS = [
 
@@ -140,7 +289,7 @@ if provider == "Ollama":
         "deepseek-coder:latest"
     ]
 
-else:
+ else:
 
     MODELS = [
 
@@ -150,7 +299,7 @@ else:
 
         "gpt-4.1"
     ]
-def get_stream_response(
+ def get_stream_response(
         provider,
         model,
         messages,
@@ -219,7 +368,7 @@ def get_stream_response(
 
     return full_response
 
-def get_ai_response(
+ def get_ai_response(
         provider,
         model,
         messages,
@@ -259,7 +408,7 @@ def get_ai_response(
 # ------------------------------------------------
 # SIDEBAR
 # ------------------------------------------------
-def export_pdf():
+ def export_pdf():
 
     pdf_file = "chat_export.pdf"
 
@@ -299,7 +448,7 @@ def export_pdf():
     doc.build(content)
 
     return pdf_file
-def export_docx():
+ def export_docx():
 
     doc = Document()
 
@@ -331,7 +480,7 @@ def export_docx():
 
     return file_name
 
-st.sidebar.title(
+ st.sidebar.title(
     "🤖 OllamaCopilot"
 )
 
@@ -339,7 +488,7 @@ st.sidebar.title(
 # MODE
 # ------------------------------------------------
 
-st.session_state.app_mode = (
+ st.session_state.app_mode = (
     st.sidebar.radio(
         "Select Mode",
         [
@@ -353,7 +502,7 @@ st.session_state.app_mode = (
 # MODEL
 # ------------------------------------------------
 
-model = st.sidebar.selectbox(
+ model = st.sidebar.selectbox(
     "Select Model",
     MODELS,
     index=0
@@ -362,19 +511,18 @@ model = st.sidebar.selectbox(
 # ------------------------------------------------
 # STATISTICS
 # ------------------------------------------------
-
-st.sidebar.subheader(
+ st.sidebar.subheader(
     "📊 Statistics"
 )
 
-try:
+ try:
 
     total_chats = (
-        get_total_chats()
+        get_total_chats(st.session_state.userid)
     )
 
     total_docs = (
-        get_document_count()
+        get_document_count(st.session_state.userid)
     )
 
     latest_chat_id = (
@@ -409,7 +557,7 @@ try:
         )
 
 
-except Exception as e:
+ except Exception as e:
 
     st.sidebar.error(
         f"Statistics Error: {e}"
@@ -417,18 +565,19 @@ except Exception as e:
 #------------------------------
 #----------Search--------------
 #------------------------------
-st.sidebar.subheader(
+ st.sidebar.subheader(
     "🔍 Search Chats"
 )
 
-search_text = st.sidebar.text_input(
+ search_text = st.sidebar.text_input(
     "Search Title"
 )
 
-if search_text:
+ if search_text:
 
     results = search_chats(
-        search_text
+        search_text,
+        st.session_state.userid
     )
 
     st.sidebar.write(
@@ -475,7 +624,7 @@ if search_text:
 # MODE SPECIFIC SIDEBAR
 # ------------------------------------------------
 
-if (
+ if (
     st.session_state.app_mode
     ==
     "💬 Chat"
@@ -485,13 +634,14 @@ if (
         "Chat Mode Active"
     )
 
-else:
+
+ else:
 
     st.sidebar.info(
         "RAG Mode Active"
     )
 
-chat_export = f"""
+ chat_export = f"""
 ====================================
 OllamaCopilot Chat Export
 ====================================
@@ -511,7 +661,7 @@ Conversation
 
 """
 
-for msg in st.session_state.messages:
+ for msg in st.session_state.messages:
 
     role = msg["role"].upper()
 
@@ -525,14 +675,14 @@ for msg in st.session_state.messages:
 
 """
 
-st.sidebar.download_button(
+ st.sidebar.download_button(
     "⬇ Export Chat",
     chat_export,
     file_name=f"{st.session_state.chat_title}.txt",
     mime="text/plain"
 )
 
-if st.sidebar.button(
+ if st.sidebar.button(
     "📄 Export PDF"
 ):
 
@@ -551,7 +701,7 @@ if st.sidebar.button(
         )
 
 
-if st.sidebar.button(
+ if st.sidebar.button(
     "📝 Export DOCX"
 ):
 
@@ -571,13 +721,13 @@ if st.sidebar.button(
             "chat_export.docx"
         )
 
-chat_json = json.dumps(
+ chat_json = json.dumps(
     st.session_state.messages,
     indent=4,
     ensure_ascii=False
 )
 
-st.sidebar.download_button(
+ st.sidebar.download_button(
     "📦 Export JSON",
     chat_json,
     file_name=
@@ -592,8 +742,7 @@ st.sidebar.download_button(
 # ------------------------------------------------
 # CHAT SIDEBAR
 # ------------------------------------------------
-
-if (
+ if (
     st.session_state.app_mode
     ==
     "💬 Chat"
@@ -676,7 +825,7 @@ if (
 
     try:
 
-        chats = get_all_chats()
+        chats = get_all_chats(st.session_state.userid)
 
         if chats:
 
@@ -763,7 +912,8 @@ if (
                                 chat[0],
                                 st.session_state.chat_title,
                                 chat_text,
-                                messages_json
+                                messages_json,
+                                st.session_state.userid
                             )
 
                             st.sidebar.success(
@@ -790,7 +940,8 @@ if (
                         try:
 
                             delete_chat(
-                                chat[0]
+                                chat[0],
+                                st.session_state.userid
                             )
 
                             st.rerun()
@@ -823,7 +974,7 @@ if (
 
     try:
 
-        history = get_chat_titles()
+        history = get_chat_titles(st.session_state.userid)
 
         if history:
 
@@ -900,7 +1051,7 @@ if (
 # RAG SIDEBAR
 # ------------------------------------------------
 
-if (
+ if (
     st.session_state.app_mode
     ==
     "📄 RAG"
@@ -930,7 +1081,7 @@ if (
 
     try:
 
-        rag_chats = get_all_rag_chats()
+        rag_chats = get_all_rag_chats(st.session_state.userid)
 
         if rag_chats:
 
@@ -1009,7 +1160,8 @@ if (
                                 chat[0],
                                 chat[1],
                                 rag_chat_text,
-                                messages_json
+                                messages_json,
+                                st.session_state.userid
                             )
 
                             st.sidebar.success(
@@ -1033,7 +1185,8 @@ if (
                             key=f"rag_delete_{chat[0]}"
                     ):
                         delete_chat(
-                            chat[0]
+                            chat[0],
+                            st.session_state.userid
                         )
 
                         st.rerun()
@@ -1203,7 +1356,8 @@ if (
                         save_chunk(
                             uploaded_file.name,
                             chunk,
-                            embedding
+                            embedding,
+                            st.session_state.userid
                         )
 
                         success_count += 1
@@ -1244,7 +1398,7 @@ if (
 
     try:
 
-        documents = get_documents()
+        documents = get_documents(st.session_state.userid)
 
         for doc in documents:
 
@@ -1270,7 +1424,8 @@ if (
                         key=f"doc_delete_{doc[0]}"
                 ):
                     delete_document(
-                        doc[0]
+                        doc[0],
+                        st.session_state.userid
                     )
 
                     st.success(
@@ -1301,6 +1456,7 @@ if (
             "No Document Selected"
         )
 
+
     # --------------------------------------------
     # RAG HISTORY
     # --------------------------------------------
@@ -1311,7 +1467,7 @@ if (
 
     try:
 
-        rag_chats1 = get_rag_chats()
+        rag_chats1 = get_rag_chats(st.session_state.userid)
 
         if rag_chats1:
 
@@ -1381,7 +1537,7 @@ if (
 
         st.sidebar.write(
             f"Total Documents: "
-            f"{get_document_count()}"
+            f"{get_document_count(st.session_state.userid)}"
         )
 
     except Exception as e:
@@ -1390,12 +1546,21 @@ if (
             str(e)
         )
 
+    if st.sidebar.button(
+            "🆕 New RAG Chat"
+    ):
+        st.session_state.rag_messages = []
+
+        st.session_state.current_rag_chat_id = None
+
+        st.rerun()
+
 
 # ------------------------------------------------
 # MAIN LAYOUT
 # ------------------------------------------------
 
-if (
+ if (
     st.session_state.app_mode
     ==
     "💬 Chat"
@@ -1407,7 +1572,7 @@ if (
 
     # Chat code here
 
-else:
+ else:
 
     st.title(
         "📄 RAG Assistant"
@@ -1419,7 +1584,7 @@ else:
 # CHAT TAB
 # =================================================
 
-if st.session_state.app_mode == "💬 Chat":
+ if st.session_state.app_mode == "💬 Chat":
 
 
     st.caption(
@@ -1580,7 +1745,8 @@ if st.session_state.app_mode == "💬 Chat":
                 inserted_id = save_chat(
                     st.session_state.chat_title,
                     chat_text,
-                    messages_json
+                    messages_json,
+                    st.session_state.userid
                 )
 
                 st.session_state.current_chat_id = (
@@ -1593,7 +1759,8 @@ if st.session_state.app_mode == "💬 Chat":
                     st.session_state.current_chat_id,
                     st.session_state.chat_title,
                     chat_text,
-                    messages_json
+                    messages_json,
+                    st.session_state.userid
                 )
 
         except Exception as e:
@@ -1609,7 +1776,7 @@ if st.session_state.app_mode == "💬 Chat":
 # RAG TAB
 # =================================================
 
-else :
+ else :
 
     st.caption(
         "Document Question Answering"
@@ -1652,8 +1819,10 @@ else :
         try:
 
             results = search_chunks(
-                rag_prompt,
-                top_k=1
+                question=rag_prompt,
+                selected_document=st.session_state.selected_document,
+                top_k=1,
+                user_id=st.session_state.userid
             )
 
             for score, chunk in results:
@@ -1781,15 +1950,34 @@ Context:
                         st.session_state.rag_messages,
                         ensure_ascii=False
                     )
-                    rag_chat_id = save_chat(
-                        f"RAG - {rag_prompt[:30]}",
-                        rag_chat_text,
-                        messages_json
-                    )
+                    if (
+                            st.session_state.get(
+                                "current_rag_chat_id"
+                            ) is None
+                    ):
 
-                    st.session_state.current_rag_chat_id = (
-                        rag_chat_id
-                    )
+                        rag_chat_id = save_chat(
+                            f"RAG - {rag_prompt[:30]}",
+                            rag_chat_text,
+                            messages_json,
+                            st.session_state.userid
+                        )
+
+                        st.session_state.current_rag_chat_id = (
+                            rag_chat_id
+                        )
+
+                    else:
+
+                        update_chat(
+                            st.session_state.current_rag_chat_id,
+                            f"RAG - {rag_prompt[:30]}",
+                            rag_chat_text,
+                            messages_json,
+                            st.session_state.userid
+                        )
+
+
 
                     if "selected_document" not in st.session_state:
                         st.session_state.selected_document = None
@@ -1797,7 +1985,8 @@ Context:
                         rag_prompt,
                         selected_document=
                         st.session_state.selected_document,
-                        top_k=3
+                        top_k=3,
+                        user_id=st.session_state.userid
                     )
                     with st.expander(
                             "🔍 Similarity Results"
