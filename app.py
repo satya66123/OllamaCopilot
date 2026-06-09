@@ -86,7 +86,9 @@ if "username" not in st.session_state:
 
 if "userid" not in st.session_state:
     st.session_state.userid = None
+if "role" not in st.session_state:
 
+    st.session_state.role = "user"
 
 DEFAULTS = {
 
@@ -98,6 +100,7 @@ DEFAULTS = {
     "logged_in": "",
     "username": "",
     "userid":"",
+    "role":"",
 
     # RAG
 
@@ -194,6 +197,13 @@ if not st.session_state.logged_in :
                 user[1]
             )
 
+            st.session_state.role = (
+                user[4]
+            )
+
+            if "role" not in st.session_state:
+                st.session_state.role = "user"
+
             st.rerun()
 
         else:
@@ -203,6 +213,7 @@ if not st.session_state.logged_in :
             )
 
 else:
+
  if st.session_state.logged_in:
 
      st.sidebar.success(
@@ -215,6 +226,8 @@ else:
          st.session_state.logged_in = False
 
          st.session_state.username = None
+
+         st.session_state.role = None
 
          st.session_state.messages = []
 
@@ -239,6 +252,8 @@ else:
                  st.session_state.logged_in = False
 
                  st.session_state.username = None
+
+                 st.session_state.role = None
 
                  st.session_state.messages = []
 
@@ -1560,7 +1575,7 @@ Conversation
 # MAIN LAYOUT
 # ------------------------------------------------
 
- if (
+if (
     st.session_state.app_mode
     ==
     "💬 Chat"
@@ -1572,7 +1587,7 @@ Conversation
 
     # Chat code here
 
- else:
+else:
 
     st.title(
         "📄 RAG Assistant"
@@ -1584,7 +1599,7 @@ Conversation
 # CHAT TAB
 # =================================================
 
- if st.session_state.app_mode == "💬 Chat":
+if st.session_state.app_mode == "💬 Chat":
 
 
     st.caption(
@@ -1776,7 +1791,7 @@ Conversation
 # RAG TAB
 # =================================================
 
- else :
+else :
 
     st.caption(
         "Document Question Answering"

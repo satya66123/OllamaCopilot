@@ -145,3 +145,24 @@ def delete_document(
 
     cursor.close()
     conn.close()
+def get_document_count_admin():
+
+    conn = get_connection()
+
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        SELECT COUNT(
+            DISTINCT document_name
+        )
+        FROM document_chunks
+        """
+    )
+
+    count = cursor.fetchone()[0]
+
+    cursor.close()
+    conn.close()
+
+    return count
