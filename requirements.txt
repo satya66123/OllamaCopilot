@@ -1,3 +1,5 @@
+ddgs
+duckduckgo-search
 bcrypt
 reportlab
 openai

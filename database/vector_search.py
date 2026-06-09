@@ -53,19 +53,71 @@ def search_chunks(
                 )
             )
 
-            similarity = (
-                cosine_similarity(
-                    question_embedding,
-                    stored_embedding
-                )
+            vector_score = cosine_similarity(
+                question_embedding,
+                stored_embedding
+            )
+
+            keyword_match = keyword_score(
+                question,
+                chunk[2]
+            )
+
+            hybrid_score = (
+                    vector_score * 0.7
+                    +
+                    keyword_match * 0.3
             )
 
             results.append(
                 (
-                    similarity,
+                    hybrid_score,
                     chunk
                 )
             )
+            results.sort(
+                reverse=True,
+                key=lambda x: x[0]
+            )
+
+            top_chunks = results[:10]
+            reranked = []
+
+            for score, chunk1 in top_chunks:
+
+                chunk_text = (
+                    chunk1[2].lower()
+                )
+
+                question_text = (
+                    question.lower()
+                )
+
+                bonus = 0
+
+                for word in (
+                        question_text.split()
+                ):
+
+                    if word in chunk_text:
+                        bonus += 0.05
+
+                final_score = (
+                        score + bonus
+                )
+
+                reranked.append(
+                    (
+                        final_score,
+                        chunk1
+                    )
+                )
+                reranked.sort(
+                    reverse=True,
+                    key=lambda x: x[0]
+                )
+
+                return reranked[:top_k]
 
         except Exception:
 
@@ -77,3 +129,25 @@ def search_chunks(
     )
 
     return results[:top_k]
+
+
+def keyword_score(
+        query,
+        text
+):
+
+    query_words = (
+        query.lower().split()
+    )
+
+    text = text.lower()
+
+    score = 0
+
+    for word in query_words:
+
+        if word in text:
+
+            score += 1
+
+    return score

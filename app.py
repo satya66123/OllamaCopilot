@@ -217,6 +217,14 @@ else:
  if st.session_state.logged_in:
 
      st.sidebar.success(
+         "✅ Hybrid Search Enabled"
+     )
+
+     st.sidebar.success(
+         "✅ Re-ranking Enabled"
+     )
+
+     st.sidebar.success(
          f"👤 {st.session_state.username}"
      )
 
