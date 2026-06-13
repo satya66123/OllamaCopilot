@@ -8,6 +8,10 @@ from utils.similarity import (
     cosine_similarity
 )
 
+from utils.bm25_search import (
+    get_bm25_scores
+)
+
 from database.vector_db import (
     get_all_chunks
 )
@@ -24,26 +28,44 @@ def search_chunks(
         create_embedding(question)
     )
 
-    chunks = get_all_chunks(user_id)
+    chunks = get_all_chunks(
+        user_id
+    )
+
+    if not chunks:
+        return []
+
+    bm25_scores = (
+        get_bm25_scores(
+            question,
+            chunks
+        )
+    )
+
+    max_bm25 = max(
+        bm25_scores
+    ) if len(
+        bm25_scores
+    ) > 0 else 1
 
     results = []
 
-    for chunk in chunks:
+    for i, chunk in enumerate(
+            chunks
+    ):
 
         try:
 
-            # chunk structure:
-            # chunk[0] = id
-            # chunk[1] = document_name
-            # chunk[2] = chunk_text
-            # chunk[3] = embedding
-
-            document_name = chunk[1]
+            document_name = (
+                chunk[1]
+            )
 
             if (
                 selected_document
                 and
-                document_name != selected_document
+                document_name
+                !=
+                selected_document
             ):
                 continue
 
@@ -53,20 +75,33 @@ def search_chunks(
                 )
             )
 
-            vector_score = cosine_similarity(
-                question_embedding,
-                stored_embedding
+            vector_score = (
+                cosine_similarity(
+                    question_embedding,
+                    stored_embedding
+                )
             )
 
-            keyword_match = keyword_score(
-                question,
-                chunk[2]
+            bm25_score = (
+                bm25_scores[i]
             )
+
+            normalized_bm25 = (
+                bm25_score
+                /
+                max_bm25
+            ) if max_bm25 > 0 else 0
 
             hybrid_score = (
-                    vector_score * 0.7
-                    +
-                    keyword_match * 0.3
+                (
+                    vector_score
+                    * 0.7
+                )
+                +
+                (
+                    normalized_bm25
+                    * 0.3
+                )
             )
 
             results.append(
@@ -75,79 +110,61 @@ def search_chunks(
                     chunk
                 )
             )
-            results.sort(
-                reverse=True,
-                key=lambda x: x[0]
-            )
-
-            top_chunks = results[:10]
-            reranked = []
-
-            for score, chunk1 in top_chunks:
-
-                chunk_text = (
-                    chunk1[2].lower()
-                )
-
-                question_text = (
-                    question.lower()
-                )
-
-                bonus = 0
-
-                for word in (
-                        question_text.split()
-                ):
-
-                    if word in chunk_text:
-                        bonus += 0.05
-
-                final_score = (
-                        score + bonus
-                )
-
-                reranked.append(
-                    (
-                        final_score,
-                        chunk1
-                    )
-                )
-                reranked.sort(
-                    reverse=True,
-                    key=lambda x: x[0]
-                )
-
-                return reranked[:top_k]
 
         except Exception:
 
             continue
 
     results.sort(
-        key=lambda x: x[0],
-        reverse=True
+        reverse=True,
+        key=lambda x: x[0]
     )
 
-    return results[:top_k]
-
-
-def keyword_score(
-        query,
-        text
-):
-
-    query_words = (
-        query.lower().split()
+    top_chunks = (
+        results[:10]
     )
 
-    text = text.lower()
+    reranked = []
 
-    score = 0
+    for score, chunk in (
+            top_chunks
+    ):
 
-    for word in query_words:
+        chunk_text = (
+            chunk[2]
+            .lower()
+        )
 
-        if word in text:
+        bonus = 0
 
-            score += 1
+        for word in (
+                question
+                .lower()
+                .split()
+        ):
 
-    return score
+            if word in chunk_text:
+
+                bonus += 0.05
+
+        final_score = (
+            score
+            +
+            bonus
+        )
+
+        reranked.append(
+            (
+                final_score,
+                chunk
+            )
+        )
+
+    reranked.sort(
+        reverse=True,
+        key=lambda x: x[0]
+    )
+
+    return reranked[
+           :top_k
+           ]
