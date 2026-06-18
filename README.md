@@ -6,6 +6,8 @@ OllamaCopilot is a full-stack AI assistant platform built using Python, Streamli
 
 The project demonstrates the implementation of modern AI application architecture, including vector search, semantic retrieval, multi-user support, and real-time AI interactions.
 
+ollamaCopilot intrgrated with openai also
+
 ---
 
 ## Features
